@@ -1,4 +1,4 @@
-function [stat, p, p_ttest, avg, stat_all, p_all] = plot_in_situ_quantification(data,...
+function [stat, p, p_ttest, avg, stat_all, p_all, mean_y, err_y, groups,x,y] = plot_in_situ_quantification(data,...
     field, x_order_label, c_order, norm_true, control_cond, triangle_tf, y_limits, control_norm)
 %PLOT_IN_SITU_QUANTIFICATION Plot in situ quantification
 % 
@@ -50,16 +50,22 @@ function [stat, p, p_ttest, avg, stat_all, p_all] = plot_in_situ_quantification(
         
         if ~norm_true
             % Plot the mean for the given field
-           [stat_all, p_all] =  plot_mean_intensity(avg{i}, field, x_order_label{i}, c_order{i},...
+            [stat_all, p_all, mean_y, err_y, groups] =  plot_mean_intensity(avg{i}, field, x_order_label{i}, c_order{i},...
                 norm_true, control_cond{i}, triangle_tf, y_limits, control_norm);
         end
     end
 
     if norm_true
         % Plot the mean for the given field
-        [stat_all, p_all] = plot_mean_intensity(avg, field, x_order_label{:}, c_order{:},...
+        [stat_all, p_all, mean_y, err_y, groups, x, y] = plot_mean_intensity(avg, field, x_order_label{:}, c_order{:},...
             norm_true, control_cond, triangle_tf, y_limits, control_norm);
     end
+
+%     stat_all = [];
+%     p_all = [];
+%     mean_y = [];
+%     err_y = [];
+%     groups = [];
 end
 
 function avg = calc_means(data, condition)
@@ -124,7 +130,7 @@ function avg = calc_means(data, condition)
             
             % Calculate error for error bars
             avg(3,i).(data_fields{k}) = calc_error(cat(1, ...
-                                        data(j).(data_fields{k})), 'SD');
+                                        data(j).(data_fields{k})), 'SD');%SD%SEM
         end
         
         % Save the condition
@@ -176,7 +182,7 @@ function err_d = calc_error(d, select_error)
     end
 end
 
-function [stat, p] = plot_mean_intensity(avg, field, x_label_order, c_order,...
+function [stat, p, mean_y, err_y, unordered_groups, x, y] = plot_mean_intensity(avg, field, x_label_order, c_order,...
     norm_true, control_cond, change_marker, y_limits, control_norm)
 %PLOT_MEAN_INTENSITY Plot the individual intensity, mean, and error bars
 % 
@@ -244,10 +250,23 @@ function [stat, p] = plot_mean_intensity(avg, field, x_label_order, c_order,...
 %             err_y(ind_loc(m)) = [];
 %         end
     else
-        y = cat(1, avg(1,:).(field));
-        mean_y = cat(1, avg(2,:).(field));
-        err_y = cat(1, avg(3,:).(field));
-        g = cat(1, avg(1,:).condition);
+        if iscell(avg)
+            y = cell(size(avg, 1),1);
+            g = cell(size(avg, 1),1);
+    
+            for k = 1:size(avg, 1)
+                y{k} = cat(1, avg{k}(1,:).(field));
+                g{k} = cat(1, avg{k}(1,:).condition);
+            end
+
+            y = cat(1, y{:});
+            g = cat(1, g{:});
+        else
+            y = cat(1, avg(1,:).(field));
+            mean_y = cat(1, avg(2,:).(field));
+            err_y = cat(1, avg(3,:).(field));
+            g = cat(1, avg(1,:).condition);
+        end
     end
     
     % Find the unique conditions and initialize variables
@@ -257,7 +276,7 @@ function [stat, p] = plot_mean_intensity(avg, field, x_label_order, c_order,...
     c = zeros(size(g,1), 3);
     mean_x = zeros(size(groups,1), 1);
 
-    if norm_true
+    if norm_true || iscell(avg)
         mean_y = zeros(size(groups,1), 1);
         err_y = zeros(size(groups,1), 1);
     end
@@ -268,12 +287,12 @@ function [stat, p] = plot_mean_intensity(avg, field, x_label_order, c_order,...
         ind = strcmp(g, groups{i});
         mean_ind = strcmp(unordered_groups, groups{i});
 
-        if norm_true
+        if norm_true || iscell(avg)
             % Calculate the mean
             mean_y(mean_ind) = mean(y(strcmp(g, groups{i})));
             
             % Calculate error for error bars
-            err_y(mean_ind) = calc_error(y(strcmp(g, groups{i})), 'SD');
+            err_y(mean_ind) = calc_error(y(strcmp(g, groups{i})), 'SD');%SD%SEM
         end
         
         % Save i for only the matched conditions to plot all points with
@@ -400,7 +419,7 @@ function [stat, p, p_ttest] = statistical_analysis(avg, field, indiv_ttest)
     
     % Perform ANOVA on the intensity data grouped by condition
     [stat.p, stat.tbl, stat.stats, stat.p_indiv, stat.means,...
-        stat.names] = stat_test(data, condition);
+        stat.names] = stat_test(log(data), condition);
     
     % Initialize variables for making comparison tables
     p = cell(size(stat.names, 1), size(stat.names, 1));
@@ -453,7 +472,7 @@ function [stat, p] = statistical_analysis_all(y, g)
     
     % Perform ANOVA on the intensity data grouped by condition
     [stat.p, stat.tbl, stat.stats, stat.p_indiv, stat.means,...
-        stat.names] = stat_test(data, condition);
+        stat.names] = stat_test(log(data), condition);
     
     % Initialize variables for making comparison tables
     p = cell(size(stat.names, 1), size(stat.names, 1));
